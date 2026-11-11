@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Tasks template for the PhotoAlbum Azure modernization plan.",
+  "tasks": [
+    {
+      "type": "upgrade",
+      "id": "001-upgrade-dotnet-to-net10",
+      "description": "Upgrade PhotoAlbum from .NET 9 to .NET 10 LTS. Assessment issues addressed: none; the framework upgrade is required because the current .NET 9 target is out of support.",
+      "reason": "The application's current .NET 9 target is out of support, and the Azure migrations should use a supported runtime.",
+      "requirements": "Upgrade the application and its runtime-dependent project assets to .NET 10 LTS. Preserve existing behavior and ensure the solution builds and its tests pass.",
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "setupBaseline",
+      "id": "002-setupBaseline",
+      "description": "Capture PhotoAlbum's pre-migration behavior as a frozen test baseline. Assessment issues addressed: none; this task provides verification evidence for the migration tasks.",
+      "reason": "A frozen baseline allows post-migration verification to compare the application's existing behavior with the migrated application.",
+      "requirements": "Snapshot the PhotoAlbum application source and document the existing behavior needed to verify photo upload, retrieval, deletion, and metadata operations. Use mocked dependencies for external services."
+    },
+    {
+      "type": "transform",
+      "id": "003-transform-azure-sql-database",
+      "description": "Move PhotoAlbum's photo metadata database from LocalDB to Azure SQL Database and use managed identity authentication. Assessment issues addressed: Windows authentication detected; SQL database connection detected; Connection string is detected; Connection strings without configuration builders detected.",
+      "reason": "LocalDB and Windows-authenticated connection settings are not suitable for the application's Azure runtime.",
+      "requirements": "Use the existing Azure SQL resource defined by the repository infrastructure. Preserve the photo metadata model, queries, and migrations, and configure passwordless managed identity access. Do not provision new infrastructure or include resource identifiers or connection strings in this plan.",
+      "dependencies": [
+        "001-upgrade-dotnet-to-net10"
+      ],
+      "skills": [
+        {
+          "name": "migration-azure-sql-database",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "004-transform-azure-storage-blob",
+      "description": "Move uploaded photo files from local disk to Azure Blob Storage while preserving upload, retrieval, and deletion behavior. Assessment issues addressed: Local or network IO operations detected.",
+      "reason": "Locally stored uploads are not durable across Azure application instances and deployments.",
+      "requirements": "Use the existing Azure Blob Storage resource defined by the repository infrastructure. Preserve image validation, photo metadata, and application access behavior. Use managed identity and do not provision new infrastructure.",
+      "dependencies": [
+        "003-transform-azure-sql-database"
+      ],
+      "skills": [
+        {
+          "name": "migration-azure-storage-blob",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "transform",
+      "id": "005-transform-azure-app-configuration",
+      "description": "Move non-secret application settings from local JSON configuration to Azure App Configuration. Assessment issues addressed: Local application configuration detected.",
+      "reason": "Externalized configuration allows environment-specific settings to be managed independently of application deployments.",
+      "requirements": "Externalize non-secret settings while preserving the application's existing configuration behavior. The repository infrastructure does not define Azure App Configuration; an existing resource must be supplied separately because provisioning is outside this plan. Keep secrets out of appsettings files and this task plan.",
+      "dependencies": [
+        "004-transform-azure-storage-blob"
+      ],
+      "skills": [
+        {
+          "name": "migration-local-appsettings-azure-app-configuration",
+          "location": "builtin"
+        }
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    },
+    {
+      "type": "integrationTest",
+      "id": "006-integrationTest",
+      "description": "Build integration tests for migrated Azure services and run post-migration verification. Assessment issues addressed: verifies the resolution of Windows authentication detected, SQL database connection detected, Connection string is detected, Connection strings without configuration builders detected, Local or network IO operations detected, and Local application configuration detected.",
+      "reason": "Post-migration verification helps confirm that the Azure service changes preserve PhotoAlbum behavior.",
+      "requirements": "Use mocked dependencies for Azure services because no provisioned test environment or resource identifiers were supplied. Verify photo upload, retrieval, deletion, metadata persistence, and non-secret configuration behavior.",
+      "dependencies": [
+        "001-upgrade-dotnet-to-net10",
+        "002-setupBaseline",
+        "003-transform-azure-sql-database",
+        "004-transform-azure-storage-blob",
+        "005-transform-azure-app-configuration"
+      ]
+    },
+    {
+      "type": "security",
+      "id": "007-security-cve-remediation",
+      "description": "Scan all project dependencies for known CVEs and remediate any identified vulnerabilities to ensure the application is secure before deployment. Assessment issues addressed: none; this is the mandatory dependency CVE review.",
+      "reason": "Dependency security should be reviewed after runtime and service modernization.",
+      "requirements": "Upgrade vulnerable dependencies to the minimum patched version. If a CVE fix requires a major version upgrade, document the affected dependency, current version, upgraded major version, and breaking change risk. Verify that the project builds and all tests pass after remediation.",
+      "dependencies": [
+        "001-upgrade-dotnet-to-net10",
+        "003-transform-azure-sql-database",
+        "004-transform-azure-storage-blob",
+        "005-transform-azure-app-configuration"
+      ],
+      "successCriteria": {
+        "passBuild": "true",
+        "passUnitTests": "true"
+      }
+    }
+  ],
+  "metadata": {
+    "planName": "modernization-plan",
+    "projectName": "PhotoAlbum",
+    "language": "dotnet",
+    "createdAt": "2026-11-11T13:38:00Z",
+    "version": "1.0"
+  }
+}
